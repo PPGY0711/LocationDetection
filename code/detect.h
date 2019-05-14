@@ -8,14 +8,15 @@
 #define _DETECT_H_
 
 #define N 100
+#define MAXM 5
 #define MAXTIME 200
 #define ABLE 1
 #define DISABLED 0
 #define LINE_MODEL 1
 #define CIRCLE_MODEL 0
+#define LENGTH(a) ((sizeof(a))/(sizeof(a[0])))
 
-
-typedef struct _object Obejct;
+typedef struct _object Object;
 typedef struct _object* ObjectPtr;
 struct _object {
 	int startcor[3]; //start cooridinate (x(t),y(t),z(t))
@@ -41,6 +42,12 @@ struct _monitor
 	int slot[MAXTIME]; //work time for monitors
 };
 
+typedef struct _monitorset Mset;
+struct _monitorset
+{
+	int amount;
+	Monitor m[MAXM];
+};
 
 typedef struct _selected Selected;
 typedef struct _selected* SelectedPtr;
@@ -73,15 +80,13 @@ SecondT* SecondTraceGreedy(ObjectPtr ob);
 //void ExtendGreedySolution(GreedyPtr fs, ObjectPtr obarr,SecondT* sec);
 
 //返回类型暂定为数组地址
-int** getCoincidenceNum(SecondT* secres);
+int** getCoincidenceNum(SecondT* secres, ObjectPtr ob);
 
-void ObjectHandle(ObjectPtr ob);
-
-int** setCompatibleFactor(int** C, SecondT* secres);
+int** setCompatibleFactor(int** C, GreedyPtr secres, ObjectPtr ob);
 
 double* setFactors(double percent, double thres, double* oriarr);
 
-int* arrangeTarget(SecondT* secres, MonitorPtr m, int** comp);
+int* arrangeTarget(GreedyPtr secres, MonitorPtr m, int** compfactor,int am);
 
 void readExcel(char* filename);
 
