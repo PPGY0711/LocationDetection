@@ -10,13 +10,17 @@
 #include <iostream>
 #include <math.h>
 #include <algorithm>
-
 #include "detect.h"
 #include "errormsg.h"
+using namespace std;
 #define marked -1
+#define NOOBJECT -1
+#define BEENTRACED -1
 #define NUM 1000 //设置0-1内随机数计算精度为小数点后4位
 #define LENGTH(a) ((sizeof(a))/(sizeof(a[0])))
 
+//通过目标数据可以得到的基本数据
+Object obarr[100];
 int aj[N], bj[N], pj[N], ts[N], te[N], v[N];
 int seq_orinum[N][2];
 int startP[N][3];
@@ -190,17 +194,30 @@ static SecondT* ExtendGreedySolution(GreedyPtr fs, int s[], int f[],int index[],
 	return resset;
 }
 
-static int getIdealRes(int sortedaj[], int sortedbj[], int sortedpj[],int maxbj)
+static void getIdealRes(int totaltime[],int maxbj,int* MAXN)
 {
 	//assume sum(bj[i]-aj[i]+pj[i] is sorted in ascending array
 	int cnt = 0;
 	int timesum = 0;
 	while (timesum <= maxbj)
 	{
-		timesum += sortedbj[cnt] - sortedaj[cnt] + sortedpj[cnt];
+		timesum += totaltime[cnt];
 		cnt++;
 	}
-	return --cnt;
+	*MAXN = --cnt;
+}
+
+static void MaxArrangeNumber(int aj[], int bj[], int pj[],int* MAXN)
+{
+	int* maxbj;
+	*maxbj = *max_element(bj, bj + N);
+	int totaltime[N];
+	for(int i = 0; i < N; i++)
+	{
+		totaltime[N] = bj[i] - aj[i] + pj[i];
+	}
+	sort(totaltime, totaltime + N, compare);
+	getIdealRes(totaltime, *maxbj, MAXN);
 }
 
 //返回类型暂定为数组地址
@@ -297,12 +314,61 @@ double* setFactors(double percent, double thres, double* oriarr)
 
 }
 
-int* arrangeTarget(SecondT* secres, MonitorPtr m, int** comp)
+int* arrangeTarget(SecondT* secres, MonitorPtr m, int** comp,int am)
 {
-	//1.对任一解集，按照Comp值排序，Comp值大的目标优先放(排序后也要维护一个seq序列，否则就丢失了对应关系）
-	//2.对于选中目标，将Sj设为能够放置的Sj最小值
-	//3.第三块逻辑是查看当前需要放置的目标其区间是否已经被占用，若被占用，舍去，若未被占用，安排探测（已经写好）
-	//23两点调用isAvailale()
+	//1.对任一解集，按照Comp值排序，Comp值大的目标优先放(排序后也要维护一个seq序列，否则就丢失了对应关系），写成静态函数
+	int** CsortSeq = new int*[LENGTH(secres->secondset)];
+	for (int i = 0; i < LENGTH(secres->secondset); i++)
+	{
+		CsortSeq[i] = new int[LENGTH(secres->secondset[0])];
+		memset(CsortSeq[i], 0, sizeof(int)*LENGTH(secres->secondset[0]));
+	}
+	CsortSeq = sortedCompandSeq(secres->secondset, comp);
+	//am是探测器个数
+	int MAXN;//考虑所有的目标，按照总时间长短得到的能探测的目标的理论最大值
+	MaxArrangeNumber(aj, bj, pj, &MAXN);
+	//初始化结果三维空间变量
+	int*** resmat = new int**[am];
+	for (int i = 0; i < am; i++)
+	{
+		resmat[i] = new int*[LENGTH(secres->secondset)];
+		for (int j = 0; j < LENGTH(secres->secondset); j++)
+		{
+			resmat[i][j] = new int[MAXN];
+			memset(resmat[i][j], NOOBJECT, sizeof(int)*MAXN);
+		}
+		//memset(resmat[i], 0, sizeof(int)*LENGTH(secres->secondset));
+	}
+	for (int i = 0; i < am; i++)
+	{
+		//2.对于选中目标，将Sj设为能够放置的Sj最小值
+		//3.第三块逻辑是查看当前需要放置的目标其区间是否已经被占用，若被占用，舍去，若未被占用，安排探测（已经写好）
+		//23两点调用isAvailale()
+		for (int j = 0; j < LENGTH(secres->secondset); j++)
+		{
+			int curcol = 0;
+			for (int k = 0; k < LENGTH(secres->secondset[0]); k++)
+			{
+				if (CsortSeq[j][k] != BEENTRACED && isAvailable(m + i, CsortSeq[j][k], &obarr[CsortSeq[j][k]].sj) == ABLE)
+				{
+					resmat[i][j][curcol++] = CsortSeq[j][k];
+					//1.从集合中去掉已经排到前一个monitor的目标
+					CsortSeq[j][k] = BEENTRACED;
+				}
+			}
+		}
+		
+		//2.重新计算Comp指标，一组随机数算一整组，之后的权重是根据结果好坏来调整的
+
+		
+		//需要改 每一次只算一个探测器能用的 还是不重新算了 每一个被写进去之后把seq值改为一个标志值 但是Comp要重新算
+	}
+}
+
+static int** sortedCompandSeq(int** secondset, int** C)
+{
+	//返回一个二维数组，行数为secondset行数，列数为secondset列数，但是记录的是按照Comp值从大到小sort之后的seq值。
+
 }
 
 //设置threshold
@@ -351,7 +417,7 @@ void writeExcel(int* res, int monitor);
 void printResult(int* res, int monitor);
 
 //改写comp函数使sort从大到小排序
-bool comp(const double &a, const double &b)
+bool compare(const double &a, const double &b)
 {
 	return a>b;
 }
