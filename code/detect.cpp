@@ -21,9 +21,11 @@ using namespace std;
 
 //通过目标数据可以得到的基本数据
 Object obarr[100];
+double weight[3] = { 0,0,0 };
 int aj[N], bj[N], pj[N], ts[N], te[N], v[N];
 int seq_orinum[N][2];
 int startP[N][3];
+int** sjSet;
 
 SecondT* SecondTraceGreedy(ObjectPtr ob)
 {
@@ -240,7 +242,8 @@ int** getCoincidenceNum(SecondT* secres)
 			for (int k = j; k < col; k++)
 			{
 				//[ts,aj),[aj,bj]=>[ts,bj]
-				if (((ts[matrix[i][j]] < ts[matrix[i][k]]) && (ts[matrix[i][k]] < bj[matrix[i][j]])) \
+				if (matrix[i][j]!= BEENTRACED && \
+					((ts[matrix[i][j]] < ts[matrix[i][k]]) && (ts[matrix[i][k]] < bj[matrix[i][j]])) \
 					|| ((ts[matrix[i][j]] < bj[matrix[i][k]]) && (bj[matrix[i][k]] < bj[matrix[i][j]])))
 					Cnum[i][j] += 1;
 			}
@@ -266,6 +269,7 @@ static void handleObject(ObjectPtr ob, int aj[], int bj[], int pj[],int ts[], in
 		ts[i] = ob[i].begint;
 		te[i] = ob[i].endt;
 		v[i] = ob[i].velocity;
+		//sj[i] = 0;
 		for (int j = 0; j < 3; j++)
 		{
 			startP[i][j] = ob[i].startcor[j];
@@ -276,7 +280,7 @@ static void handleObject(ObjectPtr ob, int aj[], int bj[], int pj[],int ts[], in
 }
 
 //计算可兼容性因子
-int** setCompatibleFactor(int** C, SecondT* secres)
+int** setCompatibleFactor(int** C, SecondT* secres, int state, int CHANGE)
 {
 	int row, col;
 	int** matrix = secres->secondset;
@@ -289,20 +293,26 @@ int** setCompatibleFactor(int** C, SecondT* secres)
 		memset(Comp[i], 0, sizeof(int)*col);
 	}
 	srand(time(NULL));
+	if (state == 0 && CHANGE ==0) {
+		while (weight[2] <= 0) {
+			for (int i = 0; i < 2; i++)
+			{
+				weight[i] = fabs(rand() % (NUM + 1) / (double)(NUM + 1));
+			}
+			weight[2] = 1 - weight[0] - weight[1];
+		}
+	}
+	if (CHANGE)
+	{
+		//set new weights on the basis of the original values
+	}
 	for (int i = 0; i < row; i++)
 	{
 		for (int j = 0; j < col; j++)
 		{
-			double weight[3] = { 0,0,0 };
-			while (weight[2] <= 0) {
-				for (int i = 0; i < 2; i++)
-				{
-					weight[i] = fabs(rand() % (NUM + 1) / (double)(NUM + 1));
-				}
-				weight[2] = 1 - weight[0] - weight[1];
-			}
 			//这个公式需要进一步完善
-			Comp[i][j] = (weight[0] / C[i][j])*(weight[1] / pj[matrix[i][j]])*(weight[2] * (aj[matrix[i][j]] - pj[matrix[i][j]] - ts[matrix[i][j]]));
+			if(matrix[i][j] != BEENTRACED)
+				Comp[i][j] = (weight[0] / C[i][j])*(weight[1] / pj[matrix[i][j]])*(weight[2] * (aj[matrix[i][j]] - pj[matrix[i][j]] - ts[matrix[i][j]]));
 		}
 	}
 	return Comp;
@@ -314,74 +324,152 @@ double* setFactors(double percent, double thres, double* oriarr)
 
 }
 
-int* arrangeTarget(SecondT* secres, MonitorPtr m, int** comp,int am)
+//得到所有探测器的安排
+void getArrangement(Mset monitors, SecondT* secres,int amount,int CHANGE)
 {
-	//1.对任一解集，按照Comp值排序，Comp值大的目标优先放(排序后也要维护一个seq序列，否则就丢失了对应关系），写成静态函数
-	int** CsortSeq = new int*[LENGTH(secres->secondset)];
-	for (int i = 0; i < LENGTH(secres->secondset); i++)
+	//初始化探测器数据
+	monitors.amount = amount;
+	for (int i = 0; i < amount; i++)
 	{
-		CsortSeq[i] = new int[LENGTH(secres->secondset[0])];
-		memset(CsortSeq[i], 0, sizeof(int)*LENGTH(secres->secondset[0]));
-	}
-	CsortSeq = sortedCompandSeq(secres->secondset, comp);
-	//am是探测器个数
-	int MAXN;//考虑所有的目标，按照总时间长短得到的能探测的目标的理论最大值
-	MaxArrangeNumber(aj, bj, pj, &MAXN);
-	//初始化结果三维空间变量
-	int*** resmat = new int**[am];
-	for (int i = 0; i < am; i++)
-	{
-		resmat[i] = new int*[LENGTH(secres->secondset)];
+		monitors.m[i].id = i;
+		monitors.m[i].slot = new int*[LENGTH(secres->secondset)];
 		for (int j = 0; j < LENGTH(secres->secondset); j++)
 		{
-			resmat[i][j] = new int[MAXN];
-			memset(resmat[i][j], NOOBJECT, sizeof(int)*MAXN);
+			monitors.m[i].slot[j] = new int[MAXTIME];
+			memset(monitors.m[i].slot[j], ABLE, sizeof(int)*MAXTIME);
 		}
-		//memset(resmat[i], 0, sizeof(int)*LENGTH(secres->secondset));
-	}
-	for (int i = 0; i < am; i++)
-	{
-		//2.对于选中目标，将Sj设为能够放置的Sj最小值
-		//3.第三块逻辑是查看当前需要放置的目标其区间是否已经被占用，若被占用，舍去，若未被占用，安排探测（已经写好）
-		//23两点调用isAvailale()
-		for (int j = 0; j < LENGTH(secres->secondset); j++)
-		{
-			int curcol = 0;
-			for (int k = 0; k < LENGTH(secres->secondset[0]); k++)
-			{
-				if (CsortSeq[j][k] != BEENTRACED && isAvailable(m + i, CsortSeq[j][k], &obarr[CsortSeq[j][k]].sj) == ABLE)
-				{
-					resmat[i][j][curcol++] = CsortSeq[j][k];
-					//1.从集合中去掉已经排到前一个monitor的目标
-					CsortSeq[j][k] = BEENTRACED;
-				}
-			}
-		}
-		
-		//2.重新计算Comp指标，一组随机数算一整组，之后的权重是根据结果好坏来调整的
-
-		
-		//需要改 每一次只算一个探测器能用的 还是不重新算了 每一个被写进去之后把seq值改为一个标志值 但是Comp要重新算
+		//重新计算Comp指标，重合数，但不改变随机权重的值，一组随机数算一整组，之后的权重是根据结果好坏来调整的
+		int** C = getCoincidenceNum(secres);
+		if (CHANGE)
+			refreshMonitors(monitors);
+		int** Comp = setCompatibleFactor(C, secres,i,CHANGE);
+		int** sorted = sortedCompandSeq(secres->secondset, Comp);
+		int** resmat = arrangeTarget(secres, &(monitors.m[i]), sorted);
+		int* index;
+		int scnt;
+		int** finalRes = findBestSolution(resmat,index,&scnt);
+		int** finalsjSet = getsjSet(sjSet,index,scnt);
+		int** TPosition = calculateCenterPos(finalRes,v,aj,bj,startP, finalsjSet);
 	}
 }
 
-static int** sortedCompandSeq(int** secondset, int** C)
+static int** getsjSet(int** sjSet, int index[],int scnt)
+{
+	int no = scnt;
+	int** finalsjSet = new int*[scnt];
+	for (int i = 0; i < scnt; i++)
+	{
+		finalsjSet[i] = sjSet[index[i]];
+	}
+	return finalsjSet;
+}
+
+static void refreshMonitors(Mset monitors)
+{
+	for (int i = 0; i < monitors.amount; i++)
+	{
+		//monitors.m[i].id = i;
+		//monitors.m[i].slot = new int*[LENGTH(secres->secondset)];
+		for (int j = 0; j < MAXTIME; j++)
+		{
+			//monitors.m[i].slot[j] = new int[MAXTIME];
+			memset(monitors.m[i].slot[j], ABLE, sizeof(int)*MAXTIME);
+		}
+	}
+}
+
+int** arrangeTarget(SecondT* secres, MonitorPtr m, int** CsortSeq)
+{
+
+	int MAXN;//考虑所有的目标，按照总时间长短得到的能探测的目标的理论最大值
+	MaxArrangeNumber(aj, bj, pj, &MAXN);
+	//初始化结果矩阵
+	int** resmat = new int*[LENGTH(secres->secondset)];
+	for (int j = 0; j < LENGTH(secres->secondset); j++)
+	{
+		resmat[j] = new int[MAXN];
+		memset(resmat[j], NOOBJECT, sizeof(int)*MAXN);
+	}
+	//初始化sj矩阵
+	int** sj = new int*[LENGTH(secres->secondset)];
+	for (int j = 0; j < LENGTH(secres->secondset); j++)
+	{
+		sj[j] = new int[LENGTH(secres->secondset[0])];
+		memset(resmat[j], 0, sizeof(int)*LENGTH(secres->secondset[0]));
+	}
+	//对于选中目标，将Sj设为能够放置的Sj最小值
+	for (int j = 0; j < LENGTH(secres->secondset); j++)
+	{
+		int curcol = 0;
+		for (int k = 0; k < LENGTH(secres->secondset[0]); k++)
+		{
+			if (CsortSeq[j][k] != BEENTRACED && isAvailable(m, CsortSeq[j][k], &sj[j][CsortSeq[j][k]],j) == ABLE)
+			{
+				resmat[j][curcol++] = CsortSeq[j][k];
+				//1.从集合中去掉已经排到前一个monitor的目标
+				//在secondset里面把seq等于CsortSeq的seq置为-1
+				for (int z = 0; z < LENGTH(secres->secondset[0]); z++)
+				{
+					if (secres->secondset[j][z] == CsortSeq[j][k])
+						secres->secondset[j][z] = BEENTRACED;
+				}
+				CsortSeq[j][k] = BEENTRACED;
+			}
+		}
+		//对每个解集重置slot
+		//memset(m->slot, ABLE, sizeof(int)*MAXTIME);
+	}
+	sjSet = sj;
+	return resmat;
+}
+
+static int** sortedCompandSeq(int** secondset, int** Comp)
 {
 	//返回一个二维数组，行数为secondset行数，列数为secondset列数，但是记录的是按照Comp值从大到小sort之后的seq值。
-
+	int** Csort = new int*[LENGTH(secondset)];
+	for (int i = 0; i < LENGTH(secondset); i++)
+	{
+		Csort[i] = new int[LENGTH(secondset[0])];
+		//memset(Csort[i], 0, sizeof(int)*LENGTH(secondset[0]));
+		memcpy(Csort[i], Comp[i], sizeof(int)*LENGTH(secondset[0]));
+		sort(Comp[i], Comp[i] + LENGTH(secondset[0]), compare);
+	}
+	int** CsortSeq = new int*[LENGTH(secondset)];
+	for (int i = 0; i < LENGTH(secondset); i++)
+	{
+		CsortSeq[i] = new int[LENGTH(secondset[0])];
+		memset(CsortSeq[i], 0, sizeof(int)*LENGTH(secondset[0]));
+		//memcpy(CsortSeq[i], Comp[i], sizeof(int)*LENGTH(secondset[0]));
+	}
+	for (int i = 0; i < LENGTH(secondset); i++)
+	{
+		int tmpcol;
+		for (tmpcol = 0; tmpcol < LENGTH(secondset[0]); tmpcol++)
+		{
+			for (int j = 0; j < LENGTH(secondset[0]); j++)
+			{
+				if (Csort[i][j] == Comp[i][tmpcol])
+				{
+					CsortSeq[i][tmpcol] = secondset[i][j];
+					break;
+				}
+			}
+		}
+	}
+	return CsortSeq;
 }
 
 //设置threshold
 static double setThreshold(int ideal, int actual[]);
 
 //资源是否被占用
-static int isAvailable(MonitorPtr m, int obseq,int* _sj)
+static int isAvailable(MonitorPtr m, int obseq,int* _sj,int resid)
 {
 	int second = ABLE;
 	int first = ABLE;
 	for (int i = aj[obseq]; i <= bj[obseq]; i++)
 	{
-		if ((m->slot)[i] == DISABLED) {
+		if ((m->slot)[resid][i] == DISABLED) {
 			//second = DISABLED;
 			return DISABLED;
 		}
@@ -393,7 +481,7 @@ static int isAvailable(MonitorPtr m, int obseq,int* _sj)
 		int j = i;
 		for ( ; j <= i + pj[obseq]; j++)
 		{
-			if(m->slot[j] == ABLE)
+			if(m->slot[resid][j] == ABLE)
 			cnt++;
 		}
 		if (cnt == pj[obseq]) {
@@ -404,8 +492,57 @@ static int isAvailable(MonitorPtr m, int obseq,int* _sj)
 	return DISABLED;
 }
 
+//在给出的一组解中找出最好的解
+int** findBestSolution(int** resmat,int* index,int* scnt)
+{
+	int no = LENGTH(resmat);
+	int* numset = new int[no];
+	for (int i = 0; i < no; i++) {
+		numset[i] = getTracedNum(resmat[i]);
+	}
+	int max = *max_element(numset, numset + no);
+	//int scnt = 0;
+	*scnt = 0;
+	index = new int[no];
+	for (int i = 0; i < no; i++) {
+		if (numset[i] == max) {
+			scnt++;
+			*index = i;
+			index += 1;
+		}
+	}
+	int** finalRes = new int*[*scnt];
+	for (int j = 0; j < *scnt; j++)
+	{
+		finalRes[j] = new int[max];
+		memcpy(finalRes[j], resmat[index[j]], sizeof(int)*max);
+	}
+	return finalRes;
+}
+
+static int getTracedNum(int* arr)
+{
+	int cnt = 0;
+	for (int i = 0; i < LENGTH(arr); i++)
+	{
+		if (arr[i] == NOOBJECT)
+			break;
+		cnt++;
+	}
+	return cnt;
+}
+
 //计算探测中心位置
-void calculateCenterPos(int** targetList);
+int** calculateCenterPos(int** targetList, int v[], int aj[], int bj[],int startP[][3],int** sj)
+{
+
+#if LINE_MODEL 
+
+#endif
+#if CIRCLE_MODEL 
+
+#endif
+}
 
 //读Excel文件接口
 void readExcel(char* filename);
@@ -421,3 +558,6 @@ bool compare(const double &a, const double &b)
 {
 	return a>b;
 }
+
+//思考一个问题：每一次重置的时候，发生了什么？是不是每一次都更新了探测器的状态？
+//逻辑全部写好之后再写到.h里面去
