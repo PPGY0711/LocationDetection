@@ -80,13 +80,13 @@ SecondT* SecondTraceGreedy(ObjectPtr ob);
 //void ExtendGreedySolution(GreedyPtr fs, ObjectPtr obarr,SecondT* sec);
 
 //返回类型暂定为数组地址
-int** getCoincidenceNum(SecondT* secres, ObjectPtr ob);
+int** getCoincidenceNum(SecondT* secres);
 
-int** setCompatibleFactor(int** C, GreedyPtr secres, ObjectPtr ob);
+int** setCompatibleFactor(int** C, SecondT* secres);
 
 double* setFactors(double percent, double thres, double* oriarr);
 
-int* arrangeTarget(GreedyPtr secres, MonitorPtr m, int** compfactor,int am);
+int* arrangeTarget(SecondT* secres, MonitorPtr m, int** comp, int am);
 
 void readExcel(char* filename);
 
