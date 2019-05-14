@@ -5,7 +5,10 @@
 **/
 #include <iostream>
 #include <stdlib.h>
+#include <string>
 #include <string.h>
+#include <streambuf>
+#include <fstream>
 #include <ctime>
 #include <iostream>
 #include <math.h>
@@ -321,7 +324,8 @@ int** setCompatibleFactor(int** C, SecondT* secres, int state, int CHANGE)
 //根据结果反馈调整权重因子
 double* setFactors(double percent, double thres, double* oriarr)
 {
-
+	//还没实现
+	return oriarr;
 }
 
 //得到所有探测器的安排
@@ -349,7 +353,8 @@ void getArrangement(Mset monitors, SecondT* secres,int amount,int CHANGE)
 		int scnt;
 		int** finalRes = findBestSolution(resmat,index,&scnt);
 		int** finalsjSet = getsjSet(sjSet,index,scnt);
-		int** TPosition = calculateCenterPos(finalRes,v,aj,bj,startP, finalsjSet);
+		//int** TPosition = calculateCenterPos(finalRes,v,aj,bj,startP, finalsjSet);
+		//printResult()
 	}
 }
 
@@ -545,13 +550,62 @@ int** calculateCenterPos(int** targetList, int v[], int aj[], int bj[],int start
 }
 
 //读Excel文件接口
-void readExcel(char* filename);
+void readExcel(char* filename)
+{
+	char* data[8];
+	ifstream iFile(filename);
+	if (!iFile.is_open())
+	{
+		errorReport("Can't open .csv file.");
+		exit(-1);
+	}
+	char buffer[256];
+	int i = 0,j = 0;
+	char* tmp;
+	const char *d = ",";
+	while (!iFile.eof())
+	{
+		iFile.getline(buffer, 100);
+		tmp = strtok(buffer, d);
+		if (1 <= i && i <= 100) {
+			while (tmp)
+			{
+				data[j++] = tmp;
+				tmp = strtok(NULL, d);
+			}
+			obarr[i - 1].seq = i - 1;
+			obarr[i - 1].oriseq = atoi(data[0]);
+			obarr[i - 1].begint = atoi(data[1]);
+			obarr[i - 1].endt = atoi(data[2]);
+			obarr[i - 1].startcor[0] = atoi(data[3]);
+#if LINE_MODEL
+			obarr[i - 1].startcor[1] = obarr[i - 1].startcor[2] = 0;
+			obarr[i - 1].velocity = atoi(data[4]);
+			obarr[i - 1].pj = atoi(data[5]);
+			obarr[i - 1].second[0] = atoi(data[6]);
+			obarr[i - 1].second[1] = atoi(data[7]);
+#endif
+#if CIRCLE_MODEL
+			//obarr[i - 1].curcor[1] = obarr[i - 1].curcor[2] = 0;
+#endif	
+		}
+		j = 0;
+		//cout << "Line " << i << ": " << buffer << endl;
+		i++;
+	}
+}
 
 //写Excel工作表接口
-void writeExcel(int* res, int monitor);
+void writeExcel(int** res, int id) 
+{
+
+}
 
 //将结果打印到终端
-void printResult(int* res, int monitor);
+void printResult(int** res, int id)
+{
+
+}
 
 //改写comp函数使sort从大到小排序
 bool compare(const double &a, const double &b)
